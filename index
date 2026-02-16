@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cloud Zolutions AI Chat</title>
+<style>
+    :root {
+        --primary-color: #0078ff;
+        --secondary-color: #00c6ff;
+        --bg-gradient: linear-gradient(135deg, #0078ff, #00c6ff);
+        --glass: rgba(255, 255, 255, 0.98);
+    }
+
+    body { font-family: 'Segoe UI', Roboto, sans-serif; margin: 0; background: #f4f7f9; }
+
+    /* Flydende Knap */
+    #chatButton {
+        position: fixed; bottom: 25px; right: 25px;
+        width: 65px; height: 65px;
+        background: var(--bg-gradient);
+        border-radius: 50%;
+        cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 8px 20px rgba(0, 120, 255, 0.3);
+        transition: 0.3s; z-index: 1000;
+    }
+    #chatButton:hover { transform: scale(1.05); }
+    #chatButton svg { width: 28px; height: 28px; fill: white; }
+
+    /* Chat Vindue */
+    #chatWindow {
+        display: none; position: fixed; bottom: 100px; right: 25px;
+        width: 400px; max-width: 90vw; height: 600px;
+        background: var(--glass);
+        border-radius: 20px;
+        box-shadow: 0 15px 40px rgba(0,0,0,0.12);
+        flex-direction: column; overflow: hidden;
+        border: 1px solid rgba(0,0,0,0.05);
+        z-index: 1000;
+        animation: fadeIn 0.3s ease-out;
+    }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+    .chat-header {
+        background: var(--bg-gradient); color: white; padding: 20px;
+        font-weight: bold; display: flex; justify-content: space-between; align-items: center;
+    }
+
+    #chatOutput { 
+        flex: 1; padding: 20px; overflow-y: auto; 
+        display: flex; flex-direction: column; gap: 12px;
+        background: #ffffff;
+    }
+
+    .msg { max-width: 85%; padding: 12px 16px; border-radius: 15px; font-size: 14px; line-height: 1.5; }
+    .bot-msg { background: #f0f2f5; align-self: flex-start; border-bottom-left-radius: 2px; color: #333; }
+    .user-msg { background: var(--primary-color); color: white; align-self: flex-end; border-bottom-right-radius: 2px; }
+
+    .chat-input-area { padding: 15px; background: #fff; display: flex; gap: 8px; border-top: 1px solid #eee; }
+    #chatInput { flex: 1; border: 1px solid #eee; outline: none; padding: 10px 15px; border-radius: 25px; }
+    #sendBtn { background: var(--primary-color); border: none; color: white; padding: 0 15px; border-radius: 20px; cursor: pointer; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<div id="chatButton">
+    <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+</div>
+
+<div id="chatWindow">
+    <div class="chat-header">
+        <span>Cloud Zolutions AI Support</span>
+        <span style="cursor:pointer" onclick="document.getElementById('chatWindow').style.display='none'">✕</span>
+    </div>
+    <div id="chatOutput">
+        <div class="msg bot-msg">Velkommen til Cloud Zolutions! 👋 Jeg kan svare på spørgsmål om IT-support, priser, tonerservice, AI-receptionist og meget mere. Hvad vil du vide?</div>
+    </div>
+    <div class="chat-input-area">
+        <input id="chatInput" type="text" placeholder="Skriv dit spørgsmål..." autocomplete="off" />
+        <button id="sendBtn">Send</button>
+    </div>
+</div>
+
+<script>
+    // --- DICTIONARY BASERET PÅ CZ.DK ---
+    const dictionary = [
+        {
+        topic: "Hjemmeside Pris (Basis)",
+        positive: ["hvad koster en hjemmeside", "pris på hjemmeside", "billig hjemmeside", "startside", "visitkort side"],
+        negative: ["webshop", "webbutik"],
+        answer: "En professionel basis-hjemmeside (visitkort-side) starter typisk fra ca. 4.995 kr. Prisen afhænger af antal undersider og om vi skal stå for tekstforfatning og billeder."
+    },
+    {
+        topic: "Webshop Pris",
+        positive: ["hvad koster en webshop", "pris på webshop", "webbutik pris", "sælge online", "woocommerce pris"],
+        negative: [],
+        answer: "En webshop-løsning starter typisk fra 14.995 kr. Her får du fuld integration med betalingssystemer og fragtmoduler, så du er klar til at sælge dine produkter med det samme."
+    },
+    {
+        topic: "Hjemmeside Abonnement / Drift",
+        positive: ["hvad koster det om måneden", "månedspris hjemmeside", "hosting pris", "vedligeholdelse pris"],
+        negative: [],
+        answer: "For at holde din side sikker og kørende, koster drift og hosting typisk mellem 199 og 499 kr./md. Det inkluderer SSL-certifikat, backup og løbende sikkerhedsopdateringer af systemet."
+    },
+    {
+        topic: "Redesign af hjemmeside",
+        positive: ["ny hjemmeside", "redesign", "opdatering af side", "moderne look", "frisk side"],
+        negative: [],
+        answer: "Har du en gammel side, der trænger til et løft? Et redesign koster ofte mindre end en helt ny side, da vi kan genbruge dit indhold. Kontakt os for en gennemgang og et uforpligtende tilbud."
+    },
+    {
+        topic: "Web-udvikling (Timepris)",
+        positive: ["timepris web", "webudvikler pris", "kodning pris", "rettelelser hjemmeside"],
+        negative: [],
+        answer: "Har du brug for mindre rettelser eller specialudvikling? Vores timepris for web-arbejde er 995 kr. ekskl. moms. Vi giver dog altid gerne et fast tilbud på større opgaver."
+    },
+    {
+        topic: "Grafisk arbejde / Logo",
+        positive: ["logo pris", "grafisk design", "visuel identitet", "farvevalg", "design hjælp"],
+        negative: [],
+        answer: "Vi hjælper også med det visuelle! Et nyt logo eller en enkel grafisk identitet koster typisk fra 2.500 kr. Det sikrer, at din virksomhed fremstår professionel og rød tråd i din markedsføring."
+    },
+    {
+        topic: "SEO Pris",
+        positive: ["hvad koster seo", "seo pris", "pris for at ligge øverst", "optimering pris"],
+        negative: [],
+        answer: "SEO er en investering. En teknisk SEO-optimering af din side starter fra 3.500 kr. som engangsbeløb, men vi tilbyder også månedlige pakker, hvis du vil kravle kontinuerligt op ad i Google-resultaterne."
+    },
+{
+        topic: "Green Cloud Koncept",
+        positive: ["green cloud", "co2", "miljøvenlig it", "aftryk", "bæredygtig strategi", "grøn omstilling", "ansvarlig"],
+        negative: ["billig", "pris"],
+        answer: "Med vores Green Cloud-koncept hjælper vi virksomheder med at mindske deres CO2-aftryk gennem grønne IT-tiltag og en ansvarlig strategi for hardware og forbrug."
+    },
+{
+        topic: "Greet",
+        positive: ["hej", "hejsa", "goddag", "halløj", "godmorgen", "godaften", "hilsen", "start"],
+        negative: ["pris", "toner", "sikkerhed", "grøn", "co2"],
+        answer: "Hej! 👋 Jeg er din digitale assistent hos Cloud Zolutions. Jeg kan hjælpe dig med alt fra **IT-support og priser** til **tonerservice, AI-receptionister, Microsoft 365 og Grøn IT**. Hvad kan jeg hjælpe din virksomhed med i dag?"
+    },
+    {
+        topic: "Ét Kontaktpunkt (Single Point of Contact)",
+        positive: ["ét sted", "samle","samlet", "alt-i-en", "ring kun til jer", "en leverandør", "samlet pakke", "et sted"],
+        negative: ["mange firmaer", "priser"],
+        answer: "Vi fungerer som jeres eneste kontaktpunkt for både IT, web og telefoni. Det betyder, at I kun behøver at ringe til ét nummer (70 25 30 40), uanset hvad problemet er."
+    },
+    {
+        topic: "Microsoft Best-Practice",
+        positive: ["best practice", "korrekt opsætning", "anerkendte leverandører", "høj kvalitet", "certificeret", "microsoft partner"],
+        negative: ["hjemmebyg"],
+        answer: "Som Microsoft Partner arbejder vi altid efter 'Best-Practice'. Det sikrer jer den mest korrekte og stabile opsætning af jeres IT-løsning fra starten."
+    },
+    {
+        topic: "Onboarding af nye kunder",
+        positive: ["komme i gang", "blive kunde", "skifte til jer", "onboarder", "opstart", "overdragelse"],
+        negative: [],
+        answer: "Vi gør det nemt at skifte til os! Vi har et fast koncept for onboarding, hvor vi hurtigt og effektivt overtager ansvaret for jeres drift og supporterer jer fra dag ét."
+    },
+    {
+        topic: "Skræddersyede løsninger",
+        positive: ["skræddersyet", "tilpasset", "vores behov", "specielle ønsker", "unikt setup"],
+        negative: ["standard"],
+        answer: "Ingen virksomheder er ens. Vi tilpasser altid vores rådgivning og IT-løsninger efter jeres specifikke behov – uanset om I er 1 eller 250 ansatte."
+    },
+    {
+        topic: "Dækning (Hele Danmark)",
+        positive: ["landsdækkende", "hele landet", "jylland", "fyn", "københavn", "sjælland", "lokal"],
+        negative: [],
+        answer: "Selvom vi har base i Slagelse, hjælper vi kunder i hele Danmark. Gennem vores netværk og fjernsupport sikrer vi hurtig hjælp, uanset hvor jeres firma ligger."
+    },
+    {
+        topic: "Gennemsigtighed & Tryghed",
+        positive: ["tryghed", "gennemsigtig", "tillid", "kommunikation", "forståeligt", "ikke-teknisk"],
+        negative: ["sort snak"],
+        answer: "Vi vægter gennemsigtig kommunikation højt. Vi forklarer tingene i et sprog, alle kan forstå, så I føler jer trygge ved jeres IT-beslutninger."
+    },
+    {
+        topic: "Effektivisering (Tid tilbage)",
+        positive: ["spare tid", "fokus på kerneforretning", "effektiv", "nemmere hverdag", "tid tilbage"],
+        negative: ["langsom"],
+        answer: "Vores mål er at give jer tiden tilbage. Ved at lade os håndtere alt det tekniske, kan I fokusere 100% på jeres egen forretning uden at bekymre jer om IT-driften."
+    },
+    {
+        topic: "CoworkIt Partnerskab",
+        positive: ["coworkit", "partnerkæde", "samarbejde", "netværk", "it-leverandører"],
+        negative: [],
+        answer: "Vi er en del af CoworkIt – en landsdækkende kæde af IT-leverandører. Det giver os adgang til et stort netværk af specialister og sikrer jer den bedste service i hele landet."
+    },
+    {
+        topic: "Trustpilot & Anmeldelser",
+        positive: ["trustpilot", "anmeldelse", "erfaring", "hvad siger andre", "kundetilfredshed"],
+        negative: [],
+        answer: "Vores kunder er glade for os! Du kan læse vores anmeldelser på Trustpilot, hvor vi bliver rost for vores hurtige service og personlige kontakt."
+    },
+
+
+{
+        topic: "IT-Chef som service (vCIO)",
+        positive: ["it-chef", "vcio", "ledelse", "strategisk", "beslutninger", "budgettering", "it-ansvarlig"],
+        negative: ["reparation", "kabel"],
+        answer: "Har jeres virksomhed brug for en IT-chef uden at ansætte en på fuldtid? Vi tilbyder vCIO-rådgivning, hvor vi deltager i ledelsesmøder og sikrer, at jeres IT-strategi følger jeres forretningsmål."
+    },
+    {
+        topic: "Patch Management & Opdateringer",
+        positive: ["opdatering", "patch", "windows update", "sikkerhedsopdateringer", "vedligeholdelse", "softwareopdatering"],
+        negative: ["købe hardware", "printer"],
+        answer: "Vi sørger for, at alle jeres computere og servere altid er opdaterede med de nyeste sikkerheds-patches. Det minimerer risikoen for hackerangreb gennem kendte sårbarheder."
+    },
+    {
+        topic: "Endpoint Security (Antivirus+)",
+        positive: ["antivirus", "sentinelone", "defender", "endpoint", "malware beskyttelse", "randsomware"],
+        negative: ["toner", "skærm"],
+        answer: "Vi installerer næste generations endpoint-beskyttelse, der overvåger mistænkelig adfærd på jeres enheder i realtid og stopper angreb, før de spreder sig til resten af netværket."
+    },
+    {
+        topic: "Webhosting & DNS",
+        positive: ["webhotel", "dns", "domænenavn", "hosting", "email hosting", "flytning af domæne"],
+        negative: ["pc reparation"],
+        answer: "Vi tilbyder stabil og hurtig hosting af hjemmesider og DNS-håndtering på danske servere. Vi sørger for, at jeres domæner altid peger det rigtige sted hen."
+    },
+    {
+        topic: "Medarbejder Onboarding",
+        positive: ["ny medarbejder", "ansættelse", "opsetning af bruger", "ny pc", "startpakke", "onboarding"],
+        negative: ["opsigelse"],
+        answer: "Gør det nemt at byde velkommen til nye kollegaer! Vi klargør computeren, opretter brugeren i 365 og sørger for, at alt spiller fra dag ét."
+    },
+    {
+        topic: "Phishing Træning",
+        positive: ["phishing test", "træning", "bevidsthed", "awareness", "medarbejder fejl", "falske mails"],
+        negative: ["kabel", "mus"],
+        answer: "Vidste du, at medarbejderne ofte er det svageste led i sikkerheden? Vi kan køre simulerede phishing-angreb for at teste og træne jeres team i at spotte it-svindel."
+    },
+    {
+        topic: "Licensstyring",
+        positive: ["licensstyring", "licenser", "compliance", "software licens", "adobe", "microsoft licens"],
+        negative: ["hardware"],
+        answer: "Vi holder styr på jeres softwarelicenser, så I aldrig betaler for mere, end I bruger, og samtidig sikrer, at I er lovligt dækket ind (compliance)."
+    },
+    {
+    topic: "Pris på ny hjemmeside",
+    positive: ["hvad", "koster", "en", "ny", "hjemmeside", "hvad koster en ny hjemmeside", "pris ny hjemmeside", "ny hjemmeside pris", "hvad koster en hjemmeside", "hjemmeside pris"],
+    negative: ["reparation", "toner", "computer", "vpn", "backup", "antivirus", "support", "it", "it-support"],
+    answer: "Prisen på en ny hjemmeside afhænger af jeres behov: <br><br>• **Basis-hjemmeside:** Fra ca. 4.995,- (God til visitkort-sider).<br>• **Professionel erhvervsside:** Typisk 8.000 - 12.000,- (Inkl. flere undersider og SEO-optimering).<br>• **Webshop:** Fra ca. 14.995,- (Alt du skal bruge for at sælge online).<br><br>Alle priser er ekskl. moms. Vil du have et specifikt tilbud? Ring til os på 70 25 30 40!"
+},
+{
+    topic: "Backup Pris",
+    positive: ["hvad koster en backup", "pris på backup", "backup pris", "hvad koster sikkerhedskopi", "cloud backup pris"],
+    negative: ["hjemmeside", "reparation", "toner"],
+    answer: "Prisen på backup afhænger af mængden af data, men vi har løsninger til alle behov: <br><br>• **Arbejdsstation/PC:** Fra kun 99,- pr. måned.<br>• **Server/Cloud-backup:** Prisen beregnes ud fra GB-forbrug, så I kun betaler for det, I bruger.<br>• **Microsoft 365 Backup:** Vi sikrer jeres mails og Teams-filer for en lav fast pris pr. bruger.<br><br>Det vigtigste er, at jeres data er sikret mod brand, tyveri og hackere. Skal vi give et overslag baseret på jeres datamængde? Ring på 70 25 30 40."
+},
+{
+    topic: "Pris på IT-support",
+    positive: ["hvad koster det at have jer som it-support", "it-support pris", "pris på it-support", "hvad koster en tekniker", "support pris", "hvad koster hjælpen"],
+    negative: ["hjemmeside", "toner", "logo"],
+    answer: "Prisen for IT-support afhænger af, om I har brug for hjælp her og nu, eller om I ønsker en fast aftale:<br><br>• **Ad hoc support:** 595 kr. ekskl. moms pr. påbegyndt 30 min. (Perfekt til hurtig fejlfinding via fjernstyring).<br>• **Fast serviceaftale:** Her fungerer vi som jeres eksterne IT-afdeling til en fast månedlig pris pr. bruger/enhed. Det giver jer budgetsikkerhed og proaktiv overvågning.<br><br>De fleste af vores kunder vælger en fast aftale, da det bedst kan betale sig i længden. Skal vi regne på en pris til jeres virksomhed? Ring til os på 70 25 30 40."
+},
+    {
+        topic: "Hardware som Service (HaaS)",
+        positive: ["hardware som service", "haas", "leje pc", "fast månedlig pris pc", "udskiftning"],
+        negative: ["køb", "brugt"],
+        answer: "Med Hardware som Service får I det nyeste udstyr til en fast lav månedlig ydelse. Vi sørger for løbende udskiftning, så I aldrig sidder med forældede computere."
+    },
+    {
+        topic: "IT-Audit & Sundhedstjek",
+        positive: ["it-audit", "sundhedstjek", "gennemgang", "rapport", "status på it", "gennemgang af server"],
+        negative: ["fjernstyring"],
+        answer: "Vi tilbyder en komplet gennemgang af jeres IT-infrastruktur. I får en rapport med konkrete anbefalinger til optimeringer, sikkerhedshuller og fremtidige investeringer."
+    },
+    {
+        topic: "Disaster Recovery",
+        positive: ["disaster recovery", "katastrofeplan", "beredskab", "brand", "tyveri", "genskab alt"],
+        negative: ["spam"],
+        answer: "Hvad gør I, hvis kontoret brænder, eller alle data bliver låst? Vi hjælper med at lave en Disaster Recovery-plan, så I ved præcis, hvordan I kommer hurtigt op at køre igen."
+    },
+{
+            topic: "Ad hoc Support & Timepris",
+            positive: ["tekniker", "time", "timen", "timepris", "nu", "her og nu", "fjernstyring", "teamviewer", "ad hoc", "hjælp nu", "computer"],
+            negative: ["hjemmeside", "fast pris", "abonnement", "receptionist"],
+            answer: "Vi kan hjælpe dig med din computer med det samme via TeamViewer fjernstyring! Vores ad hoc support koster 595 kr. ekskl. moms pr. påbegyndt 30 minutter."
+        },
+        {
+            topic: "Serviceaftaler (Ekstern IT-afdeling)",
+            positive: ["fast pris", "måned", "it-pasning", "ekstern", "afdeling", "aftale", "managed", "serviceaftale"],
+            negative: ["ad hoc", "toner"],
+            answer: "Ja, vi fungerer som den eksterne IT-afdeling for mange SMV'er. Vi tilbyder faste månedlige priser på IT-pasning, så I har fuldt overblik over omkostningerne."
+        },
+        {
+            topic: "Tonerservice - Detaljer",
+            positive: ["gratis", "bestiller", "fragten", "overvåge", "automatisk", "gratis fragt", "bestil"],
+            negative: ["pc", "hjemmeside", "reparere"],
+            answer: "Vores tonerservice er 100% gratis. Vi overvåger jeres printere automatisk, så I aldrig løber tør. I betaler kun for selve toneren – fragten er altid gratis."
+        },
+        {
+            topic: "Printer reparation",
+            positive: ["reparere", "reparation", "printerfejl", "papirstop", "defekt"],
+            negative: ["bestil", "gratis"],
+            answer: "Vi hjælper gerne med fejlfinding og reparation af jeres printere som en del af vores normale IT-support takst."
+        },
+        {
+            topic: "Genbrug & Hardware (Grøn IT)",
+            positive: ["brugt", "brugte", "billig", "spar", "renoveret", "genbrug", "garanti", "refurbished", "miljø", "mac", "skærme", "tastatur"],
+            negative: ["nypris", "software"],
+            answer: "Vi sælger både nye og renoverede computere (Grøn IT). Du kan spare 25-50% på en renoveret PC eller Mac, og vi giver altid fuld garanti på hardwaren."
+        },
+        {
+            topic: "AI & Telefoni",
+            positive: ["ai", "receptionist", "viderestil", "besked", "telefoni", "omstilling", "telefonpasning", "teams telefoni"],
+            negative: ["printer", "skærm"],
+            answer: "Vores AI-receptionist kan tage beskeder og viderestille opkald døgnet rundt. Det kan også integreres direkte i Microsoft Teams, så jeres telefoni kører over skyen."
+        },
+        {
+            topic: "Erhvervstelefoni - Pris",
+            positive: ["hvad koster", "telefoni pris", "mobil", "abonnement"],
+            negative: ["computer", "hjemmeside", "webshop", "website"],
+            answer: "Vi tilbyder professionel erhvervstelefoni. Kontakt os for et specifikt tilbud, da prisen afhænger af antal brugere og jeres behov for AI-omstilling."
+        },
+        {
+            topic: "Microsoft 365 & Migrering",
+            positive: ["flytte", "migrering", "licenser", "købe", "opsætning", "sharepoint", "teams", "sikre", "filer"],
+            negative: ["hardware", "toner", "hjemmeside", "webshop", "website"],
+            answer: "Vi er eksperter i Microsoft 365. Vi håndterer alt fra flytning af dine gamle mails til opsætning af SharePoint, så jeres filer ligger sikkert i skyen."
+        },
+        {
+            topic: "Internet & Netværk (Fiber/WIFI)",
+            positive: ["fiber", "wifi", "router", "bredbånd", "kontoret", "hjemmearbejde", "langsomt", "dårligt", "forbindelse"],
+            negative: ["toner", "mail"],
+            answer: "Vi leverer lynhurtigt fiber-internet og opsætter professionelt WIFI på kontoret. Hvis dit netværk er langsomt, kan vi lave en måling og optimere jeres router-setup."
+        },
+        {
+            topic: "IT-Sikkerhed & Backup",
+            positive: ["beskytter", "hackere", "backup", "antivirus", "gdpr", "firewall", "sikring", "beskyttelse"],
+            negative: ["billig"],
+            answer: "Vi beskytter jeres data med automatisk cloud-backup og professionel antivirus. Vi kan også gennemgå jeres systemer for at sikre, at I overholder GDPR."
+        },
+        {
+            topic: "Kontakt & Lokation (Slagelse)",
+            positive: ["bor i", "adresse", "slagelse", "nummer", "telefonnummer", "telefon", "mail", "skriv", "finde", "kinavej"],
+            negative: [],
+            answer: "Vi bor på Kinavej 1C i Slagelse. Du kan altid ringe til os på 📞 70 25 30 40 eller skrive til ✉️ hej@cloudzolutions.dk."
+        },
+        {
+            topic: "Møder & Kunder",
+            positive: ["book", "møde", "rådgiver", "uforpligtende", "privat", "erhverv", "kun erhverv"],
+            negative: [],
+            answer: "Vi hjælper primært erhvervskunder (SMV'er). Du kan booke et uforpligtende møde med en rådgiver ved at ringe til os eller sende en mail."
+        },
+        {
+            topic: "Åbningstider",
+            positive: ["åbent", "lukket", "hvornår", "tid", "mandag", "fredag"],
+            negative: [],
+            answer: "Vi har åbent mandag til torsdag fra 08:30 - 16:30, og fredag fra 08:30 - 16:00. Vores AI-receptionist kan dog tage imod beskeder døgnet rundt!"
+        },
+        {
+            topic: "Generel Support",
+            positive: ["support", "hjælp", "it-support", "problemer", "tekniker", "ad hoc", "fjernstyring", "onsite"],
+            negative: ["hjemmeside", "design", "toner"],
+            answer: "Vi tilbyder professionel IT-support til både små og store virksomheder. Vi kan hjælpe via telefon, chat eller direkte på jeres adresse. Prisen starter ved 595 kr. pr. 30 minutter for ad hoc support."
+        },
+        {
+            topic: "Priser",
+            positive: ["pris", "koster", "billig", "tilbud", "hvad er prisen", "takst", "timepris"],
+            negative: ["hvor", "hvem"],
+            answer: "Vores ad hoc IT-support koster 595 kr. ekskl. moms pr. påbegyndt 30 min. Vi tilbyder også faste serviceaftaler, hvor vi fungerer som jeres eksterne IT-afdeling til en fast månedlig pris."
+        },
+        {
+            topic: "Tonerservice",
+            positive: ["toner", "printer", "blæk", "tonerservice", "gratis fragt", "lager"],
+            negative: ["computer", "hjemmeside"],
+            answer: "Vores tonerservice er gratis og uden abonnement! Vi overvåger jeres printere og sender automatisk toner, inden I løber tør. I betaler kun for selve toneren – fragten er gratis."
+        },
+        {
+            topic: "AI-Receptionist",
+            positive: ["ai", "receptionist", "telefoni", "omstilling", "telefonpasning", "kunstig intelligens"],
+            negative: ["printer", "skærm", "hjemmeside", "website", "webshop"],
+            answer: "Med vores AI-receptionist kan I få passet telefonen døgnet rundt. Den kan viderestille opkald, svare på spørgsmål og integrere med jeres systemer. Priser starter fra ca. 2.499 kr./md."
+        },
+        {
+            topic: "Hardware/PC",
+            positive: ["pc", "computer", "laptop", "mac", "skærm", "hardware", "renoveret", "genbrug"],
+            negative: ["soft", "hjemmeside"],
+            answer: "Vi leverer alt i hardware – både nyt og renoveret (grøn IT). Ved at købe renoverede computere gennem os kan I spare 25-50% i forhold til nyprisen og samtidig skåne miljøet."
+        },
+        {
+            topic: "Microsoft 365/Cloud",
+            positive: ["office", "365", "microsoft", "cloud", "teams", "mail", "outlook", "migrering", "licens"],
+            negative: ["hardware", "printer"],
+            answer: "Vi hjælper med alt omkring Microsoft 365 – fra licensstyring og mail-migrering til sikkerhedsopsetning i Teams og SharePoint."
+        },
+        {
+            topic: "Lokation/Område",
+            positive: ["hvor", "adresse", "slagelse", "sjælland", "korsør", "næstved", "ringsted", "holbæk"],
+            negative: ["pris", "it"],
+            answer: "Cloud Zolutions har base på Kinavej 1C i Slagelse. Vi hjælper virksomheder i hele Danmark, men har særligt mange kunder i Slagelse, Korsør, Næstved og omegn."
+        },
+        {
+            topic: "Kontakt",
+            positive: ["kontakt", "ring", "telefonnummer", "mail", "skriv", "book", "møde"],
+            negative: [],
+            answer: "Du kan ringe til os på +45 70 25 30 40 eller skrive en mail til hej@cloudzolutions.dk. Vi er klar til en uforpligtende snak om jeres IT!"
+        },
+        {
+            topic: "Internet",
+            positive: ["internet", "fiber", "bredbånd", "wifi", "router", "forbindelse"],
+            negative: ["toner"],
+            answer: "Vi leverer lynhurtigt internet (fiber, kobber og kabel) til både kontoret og medarbejdernes hjemmearbejdspladser. Router med WIFI medfølger altid."
+        },
+        {
+            topic: "Sikkerhed",
+            positive: ["sikkerhed", "backup", "antivirus", "hacker", "sikring", "firewall", "beskyttelse"],
+            negative: ["billig"],
+            answer: "Sikkerhed er essentielt. Vi tilbyder backup-løsninger, antivirus og overvågning, der sikrer jeres data mod nedbrud og cyberangreb."
+        },
+{
+            topic: "Managed IT / Totalaftale",
+            positive: ["managed", "total", "outsourcing", "it-afdeling", "ansvar", "drift", "overvågning"],
+            negative: ["enkelt", "ad hoc"],
+            answer: "Vi tilbyder Managed IT, hvor vi tager det fulde ansvar for jeres IT-drift. Vi overvåger jeres systemer 24/7 og løser problemerne, før de opstår, til en fast månedlig pris."
+        },
+        {
+            topic: "IT-Sikkerhedspakke / Baseline",
+            positive: ["sikkerhedspakke", "baseline", "standard", "beskyttelse", "sikkerhedstjek", "phishing", "to-faktor"],
+            negative: ["hardware", "toner"],
+            answer: "Vores sikkerhedspakke sikrer jeres virksomhed mod de mest gængse trusler. Vi opsætter to-faktor login, antivirus og backup, så I kan sove trygt om natten."
+        },
+        {
+            topic: "Hjemmearbejde / VPN",
+            positive: ["hjemme", "hjemmearbejde", "vpn", "fjernadgang", "hjemmefra", "kontor", "forbindelse"],
+            negative: ["toner", "website", "webshop", "hjemmeside"],
+            answer: "Vi opsætter sikre forbindelser (VPN), så jeres medarbejdere kan arbejde hjemmefra med direkte adgang til firmaets filer og systemer, som sad de på kontoret."
+        },
+        {
+            topic: "E-mail Sikkerhed / Spam",
+            positive: ["spam", "falske mails", "filter", "sikker mail", "kryptering", "virus i mail"],
+            negative: ["printer"],
+            answer: "Vi implementerer avancerede spamfiltre og mail-kryptering, der stopper phishing-forsøg og sikrer, at jeres fortrolige informationer ikke ender i de forkerte hænder."
+        },
+        {
+            topic: "Serverdrift / Azure",
+            positive: ["server", "azure", "hosting", "lokal server", "skyen", "virtualisering", "oppetid"],
+            negative: ["mus", "tastatur"],
+            answer: "Vi drifter både lokale servere og cloud-servere i Microsoft Azure. Vi sørger for maksimal oppetid, hurtig hastighed og løbende opdateringer."
+        },
+        {
+            topic: "Wi-Fi Optimering",
+            positive: ["dårligt wifi", "dækning", "access point", "internet hakker", "ustabilt", "rækkevidde"],
+            negative: ["toner"],
+            answer: "Oplever I dårligt netværk? Vi udfører Wi-Fi opmålinger og opsætter professionelle access points, der sikrer stabil dækning i hele jeres bygning."
+        },
+        {
+            topic: "IT til SMV",
+            positive: ["smv", "lille virksomhed", "iværksætter", "opstart", "vækst", "skalere"],
+            negative: ["privat"],
+            answer: "Vi er specialister i IT til SMV-segmentet. Vi forstår behovet for løsninger, der kan skaleres i takt med at virksomheden vokser, uden at det sprænger budgettet."
+        },
+        {
+            topic: "Grøn IT / Bæredygtighed",
+            positive: ["grøn", "miljø", "co2", "bæredygtig", "genanvendelse", "it-skrot"],
+            negative: ["ny"],
+            answer: "Med vores Grøn IT-koncept hjælper vi jer med at reducere jeres CO2-aftryk. Vi fokuserer på genanvendelse af hardware og energioptimering af jeres IT-park."
+        },
+        {
+            topic: "Hjemmeside Flytning",
+            positive: ["flytte hjemmeside", "hosting", "webhotel", "domæne", "flytning", "flytte"],
+            negative: ["reparere pc"],
+            answer: "Vi kan hjælpe med at flytte jeres eksisterende hjemmeside til vores lynhurtige danske servere, hvilket ofte giver en mærkbar forbedring i hastigheden."
+        },
+        {
+            topic: "IT-Rådgivning / Strategi",
+            positive: ["rådgivning", "strategi", "it-chef", "sparring", "fremtid", "digitalisering"],
+            negative: ["mus"],
+            answer: "Vi tilbyder strategisk IT-rådgivning, hvor vi hjælper jer med at lægge en plan for fremtidens IT, så teknologien understøtter jeres forretningsmål."
+        },
+        {
+            topic: "Backup Gendannelse",
+            positive: ["mistet data", "slettet", "gendan", "mistet fil", "nedbrud", "ødelagt"],
+            negative: ["toner"],
+            answer: "Har I mistet data? Hvis I har vores backup-løsning, kan vi lynhurtigt gendanne slettede filer eller hele systemer efter et nedbrud."
+        },
+        {
+            topic: "Uddannelse / Kurser",
+            positive: ["lære", "kursus", "undervisning", "hvordan bruger man", "træning", "workshop"],
+            negative: ["købe"],
+            answer: "Vi tilbyder målrettet træning i bl.a. Microsoft 365, Teams og IT-sikkerhed, så jeres medarbejdere får det maksimale ud af de værktøjer, I har."
+        },
+        {
+            topic: "Kabling / Netværksstik",
+            positive: ["kabel", "stik", "netværksstik", "kabling", "kontor", "racks"],
+            negative: ["wifi"],
+            answer: "Skal I have nyt kontor? Vi sørger for professionel kabling og opsætning af netværksstik og rackskabe, så jeres infrastruktur er i orden fra start."
+        },
+        {
+            topic: "Hardware Leasing",
+            positive: ["leasing", "leje", "afdrag", "finansiering", "hardware leasing"],
+            negative: ["toner"],
+            answer: "Vi tilbyder fleksibel leasing af hardware, så I kan få det nyeste udstyr uden at binde store mængder kapital i udstyret med det samme."
+        },
+        {
+            topic: "Videoovervågning",
+            positive: ["overvågning", "kamera", "sikring", "tyverisikring", "kameraovervågning"],
+            negative: ["skærm"],
+            answer: "Vi leverer og opsætter professionelle overvågningsløsninger med kameraer, der kan tilgås direkte fra jeres mobil eller computer."
+        },
+        {
+        topic: "Marketing & Synlighed",
+        positive: ["marketing", "markedsføring", "synlighed", "reklame", "branding", "kunder"],
+        negative: ["printer", "toner"],
+        answer: "Vi hjælper virksomheder med den tekniske del af deres marketing. Det inkluderer alt fra lynhurtig hosting af din hjemmeside til teknisk SEO-optimering, så du bliver fundet nemmere af dine kunder."
+    },
+    {
+        topic: "SEO & Google",
+        positive: ["seo", "google", "søgemaskine", "rank", "finde mig", "hjemmeside optimering", "søgeord"],
+        negative: [],
+        answer: "Vil du ligge højere på Google? Vi sørger for, at din tekniske SEO er i top. Det betyder hurtige svartider, korrekt kodestruktur og SSL-sikkerhed, som er fundamentet for god markedsføring."
+    },
+    {
+        topic: "Google Business Profile",
+        positive: ["google business", "google map", "kort", "anmeldelser på google", "min virksomhed på google"],
+        negative: [],
+        answer: "Vi kan hjælpe med at optimere din Google Business-profil, så din virksomhed fremstår professionelt på kortet og i søgeresultaterne med korrekte åbningstider og kontaktoplysninger."
+    },
+    {
+        topic: "Leadgenerering via AI",
+        positive: ["leads", "nye kunder", "automatisering af salg", "ai chatbot", "salgsværktøj"],
+        negative: [],
+        answer: "Brug teknologien til at skaffe kunder! Vores AI-løsninger kan opsættes til at opsamle leads eller besvare spørgsmål fra potentielle kunder på din hjemmeside 24/7."
+    },
+    {
+        topic: "Nyhedsbreve & Mail-marketing",
+        positive: ["nyhedsbrev", "mailchimp", "e-mail marketing", "nyhedsmail", "kampagne"],
+        negative: ["spam", "falske mails"],
+        answer: "Vi sikrer, at din tekniske mail-opsætning (SPF, DKIM og DMARC) er korrekt, så dine marketing-mails rent faktisk lander i kundens indbakke og ikke i deres spamfilter."
+    },
+    {
+        topic: "Webhastighed & Konvertering",
+        positive: ["hastighed", "hurtig side", "loadtid", "konvertering", "performance"],
+        negative: ["internet"],
+        answer: "Vidste du, at en langsom hjemmeside koster kunder? Vi optimerer din server og web-performance, så dine besøgende får en lynhurtig oplevelse, hvilket øger chancen for salg."
+    }
+    ];
+
+    // --- LOGIK ---
+    const chatButton = document.getElementById("chatButton");
+    const chatWindow = document.getElementById("chatWindow");
+    const chatOutput = document.getElementById("chatOutput");
+    const chatInput = document.getElementById("chatInput");
+    const sendBtn = document.getElementById("sendBtn");
+
+    chatButton.onclick = () => {
+        const isHidden = chatWindow.style.display === "none" || chatWindow.style.display === "";
+        chatWindow.style.display = isHidden ? "flex" : "none";
+    };
+
+    function findResponse(userInput) {
+        const input = userInput.toLowerCase();
+        let bestMatch = null;
+        let highestScore = -1;
+
+        dictionary.forEach(entry => {
+            let score = 0;
+            entry.positive.forEach(word => { if (input.includes(word)) score++; });
+            entry.negative.forEach(word => { if (input.includes(word)) score--; });
+
+            if (score > highestScore) {
+                highestScore = score;
+                bestMatch = entry;
+            }
+        });
+
+        return highestScore > 0 ? bestMatch.answer : "Det kunne jeg ikke finde et præcist svar på. Prøv at spørge om IT-support, priser, tonerservice eller kontakt os på 70 25 30 40.";
+    }
+
+    function handleSend() {
+        const text = chatInput.value.trim();
+        if (!text) return;
+
+        chatOutput.innerHTML += `<div class="msg user-msg">${text}</div>`;
+        chatInput.value = "";
+        
+        setTimeout(() => {
+            const response = findResponse(text);
+            chatOutput.innerHTML += `<div class="msg bot-msg">${response}</div>`;
+            chatOutput.scrollTop = chatOutput.scrollHeight;
+        }, 500);
+
+        chatOutput.scrollTop = chatOutput.scrollHeight;
+    }
+
+    sendBtn.onclick = handleSend;
+    chatInput.onkeypress = (e) => { if (e.key === 'Enter') handleSend(); };
+</script>
+
+</body>
+</html>
